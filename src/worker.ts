@@ -3,9 +3,11 @@ import { cors } from 'hono/cors';
 import { health } from './api/health';
 import { createIssuesRoutes } from './api/issues-kv';
 import { createTodosRoutes } from './api/todos-kv';
+import { createUsersRoutes } from './api/users-kv';
 import { createWebhookHandler } from './pylon/handler-kv';
 import { setMCPEnv } from './mcp/client';
 import { setKVNamespace } from './store/kv-issues';
+import { setUsersKVNamespace } from './store/kv-users';
 import { setAgentEnv } from './agent';
 import { setVerifyEnv } from './pylon/verify';
 
@@ -26,6 +28,7 @@ const app = new Hono<{ Bindings: Bindings }>();
 app.use('*', async (c, next) => {
   setMCPEnv(c.env);
   setKVNamespace(c.env.ISSUES_KV);
+  setUsersKVNamespace(c.env.ISSUES_KV); // Reuse same KV namespace
   setAgentEnv(c.env);
   setVerifyEnv(c.env);
   await next();
@@ -44,6 +47,7 @@ app.route('/health', health);
 // API routes (KV-backed)
 app.route('/api/issues', createIssuesRoutes());
 app.route('/api/todos', createTodosRoutes());
+app.route('/api/users', createUsersRoutes());
 
 // Pylon webhook (KV-backed)
 app.post('/api/pylon/webhook', createWebhookHandler());

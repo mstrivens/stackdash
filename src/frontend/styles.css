@@ -88,9 +88,11 @@ body {
 }
 
 #root {
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* ================================
@@ -243,7 +245,8 @@ body {
   padding: var(--space-lg);
   flex: 1;
   overflow: hidden;
-  max-height: calc(100vh - 65px);
+  min-height: 0; /* Important for flex children to allow shrinking */
+  height: 100%; /* Take full available height from flex parent */
 }
 
 /* ================================
@@ -258,6 +261,8 @@ body {
   border: 1px solid var(--border-light);
   box-shadow: var(--shadow-card);
   animation: fadeInUp 0.4s ease;
+  min-height: 0; /* Important for grid children to allow proper sizing */
+  height: 100%; /* Fill grid cell height */
 }
 
 @keyframes fadeInUp {
@@ -312,12 +317,10 @@ body {
 }
 
 .column-content {
-  flex: 1;
+  flex: 1 1 0; /* Grow, shrink, and start from 0 basis */
   overflow-y: auto;
   padding: var(--space-md);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
+  min-height: 0; /* Important for flex children to allow shrinking and enable overflow */
 }
 
 /* ================================
@@ -332,6 +335,11 @@ body {
   transition: all var(--transition-fast);
   position: relative;
   overflow: hidden;
+  margin-bottom: var(--space-sm);
+}
+
+.issue-card:last-child {
+  margin-bottom: 0;
 }
 
 .issue-card::before {
@@ -673,6 +681,11 @@ body {
   padding: var(--space-md);
   border: 1px solid var(--border-light);
   transition: all var(--transition-fast);
+  margin-bottom: var(--space-sm);
+}
+
+.todo-card:last-child {
+  margin-bottom: 0;
 }
 
 .todo-card:hover {
@@ -821,6 +834,7 @@ body {
   padding: var(--space-md);
   border: 1px solid var(--accent);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  margin-bottom: var(--space-sm);
 }
 
 .todo-edit-field {

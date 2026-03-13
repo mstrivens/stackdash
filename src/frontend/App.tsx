@@ -7,7 +7,7 @@ import { AssigneeFilter } from './components/AssigneeFilter';
 import type { Todo } from './types';
 
 function App() {
-  const { issues, stats, assignees, isLoading, lastUpdated, refetch } = useIssues();
+  const { issues, stats, assignees, userMap, isLoading, lastUpdated, refetch } = useIssues();
   const {
     todos,
     addTodo,
@@ -89,6 +89,7 @@ function App() {
         todos={filteredTodos}
         lastUpdated={lastUpdated}
         isLoading={isLoading}
+        userMap={userMap}
         onTodoGenerated={handleTodoGenerated}
         onTodoToggle={toggleTodo}
         onTodoDelete={deleteTodo}

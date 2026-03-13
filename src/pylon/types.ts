@@ -81,6 +81,31 @@ export interface WebhookVerificationResult {
   error?: string;
 }
 
+// Pylon user from MCP pylon_list_users
+export interface PylonUser {
+  id: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  team?: {
+    id: string;
+    name?: string;
+  } | null;
+}
+
+// Team member from pylon_list_teams
+export interface PylonTeamMember {
+  id: string;
+  email: string;
+}
+
+// Pylon team from MCP pylon_list_teams
+export interface PylonTeam {
+  id: string;
+  name: string;
+  users: PylonTeamMember[];
+}
+
 // Full Pylon issue from MCP pylon_get_issue
 export interface PylonMCPIssue {
   id: string;

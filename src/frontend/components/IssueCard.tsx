@@ -1,17 +1,35 @@
-import React, { useState } from 'react';
-import type { TriagedIssue, Todo } from '../types';
+import React, { useState, useMemo } from 'react';
+import type { TriagedIssue, Todo, Assignee } from '../types';
 import { generateTodo, deleteIssue } from '../hooks/useIssues';
 
 interface IssueCardProps {
   issue: TriagedIssue;
+  userMap: Map<string, Assignee>;
   onTodoGenerated: (todo: Todo) => void;
   onDeleted: (issueId: string) => void;
 }
 
-export function IssueCard({ issue, onTodoGenerated, onDeleted }: IssueCardProps) {
+export function IssueCard({ issue, userMap, onTodoGenerated, onDeleted }: IssueCardProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Get enriched assignee data from userMap
+  const assignee = useMemo(() => {
+    const issueAssignee = issue.originalIssue.assignee;
+    if (!issueAssignee) return null;
+
+    // Look up the user in the userMap to get name/email
+    const user = userMap.get(issueAssignee.id);
+    if (user) {
+      return {
+        id: issueAssignee.id,
+        name: issueAssignee.name || user.name,
+        email: issueAssignee.email || user.email,
+      };
+    }
+    return issueAssignee;
+  }, [issue.originalIssue.assignee, userMap]);
 
   const handleDelete = async () => {
     if (isDeleting) return;
@@ -108,9 +126,9 @@ export function IssueCard({ issue, onTodoGenerated, onDeleted }: IssueCardProps)
            'Unknown'}
         </span>
         <div className="issue-meta-right">
-          {issue.originalIssue.assignee && (
-            <span className="assignee-badge" title={issue.originalIssue.assignee.email || ''}>
-              {issue.originalIssue.assignee.name || issue.originalIssue.assignee.email || 'Assigned'}
+          {assignee && (
+            <span className="assignee-badge" title={assignee.email || ''}>
+              {assignee.name || assignee.email || 'Assigned'}
             </span>
           )}
           {issue.originalIssue.customerTier && (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { TriagedIssue, DashboardStats, IssuesResponse, Assignee } from '../types';
 
 const POLL_INTERVAL = 5000; // 5 seconds
@@ -7,6 +7,7 @@ interface UseIssuesReturn {
   issues: TriagedIssue[];
   stats: DashboardStats;
   assignees: Assignee[];
+  userMap: Map<string, Assignee>;
   isLoading: boolean;
   error: string | null;
   lastUpdated: string | null;
@@ -27,32 +28,42 @@ const defaultStats: DashboardStats = {
 export function useIssues(): UseIssuesReturn {
   const [issues, setIssues] = useState<TriagedIssue[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [assignees, setAssignees] = useState<Assignee[]>([]);
+  const [users, setUsers] = useState<Assignee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
+  // Create a map of user ID -> user data for quick lookup
+  const userMap = useMemo(() => {
+    const map = new Map<string, Assignee>();
+    for (const user of users) {
+      map.set(user.id, user);
+    }
+    return map;
+  }, [users]);
+
+  // Use all users from the API as assignees (already filtered to SE team on backend)
+  const assignees = useMemo(() => {
+    return [...users].sort((a, b) => {
+      const nameA = a.name || a.email || '';
+      const nameB = b.name || b.email || '';
+      return nameA.localeCompare(nameB);
+    });
+  }, [users]);
+
+  // Fetch issues only (for polling)
   const fetchIssues = useCallback(async () => {
     try {
-      const [issuesResponse, assigneesResponse] = await Promise.all([
-        fetch('/api/issues'),
-        fetch('/api/issues/assignees'),
-      ]);
+      const response = await fetch('/api/issues');
 
-      if (!issuesResponse.ok) {
-        throw new Error(`Failed to fetch issues: ${issuesResponse.status}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch issues: ${response.status}`);
       }
 
-      const issuesData: IssuesResponse = await issuesResponse.json();
-      setIssues(issuesData.issues);
-      setStats(issuesData.stats);
-      setLastUpdated(issuesData.lastUpdated);
-
-      if (assigneesResponse.ok) {
-        const assigneesData = await assigneesResponse.json();
-        setAssignees(assigneesData.assignees || []);
-      }
-
+      const data: IssuesResponse = await response.json();
+      setIssues(data.issues);
+      setStats(data.stats);
+      setLastUpdated(data.lastUpdated);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -61,12 +72,28 @@ export function useIssues(): UseIssuesReturn {
     }
   }, []);
 
-  // Initial fetch
+  // Fetch users once on mount (static data)
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch('/api/users');
+        if (response.ok) {
+          const data = await response.json();
+          setUsers(data.users || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch users:', err);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  // Initial issues fetch
   useEffect(() => {
     fetchIssues();
   }, [fetchIssues]);
 
-  // Polling
+  // Poll issues only (not users)
   useEffect(() => {
     const interval = setInterval(fetchIssues, POLL_INTERVAL);
     return () => clearInterval(interval);
@@ -76,6 +103,7 @@ export function useIssues(): UseIssuesReturn {
     issues,
     stats: stats || defaultStats,
     assignees,
+    userMap,
     isLoading,
     error,
     lastUpdated,

@@ -1,5 +1,5 @@
 import type { MCPToolCall, MCPToolResult } from '../types';
-import type { PylonMCPIssue } from '../pylon/types';
+import type { PylonMCPIssue, PylonUser, PylonTeam } from '../pylon/types';
 
 // MCP JSON-RPC response structure
 interface MCPResponse {
@@ -28,6 +28,8 @@ export const MCP_TOOLS = {
   SEARCH_ISSUES: 'pylon_search_issues',
   GET_ACCOUNT: 'pylon_get_account',
   LIST_ACCOUNTS: 'pylon_list_accounts',
+  LIST_USERS: 'pylon_list_users',
+  LIST_TEAMS: 'pylon_list_teams',
 } as const;
 
 let requestId = 0;
@@ -285,6 +287,34 @@ export class StackOneMCPClient {
       console.error('Failed to list MCP tools:', error);
       return [];
     }
+  }
+
+  async listUsers(): Promise<MCPToolResult & { content: PylonUser[] | null }> {
+    const result = await this.callTool({
+      name: MCP_TOOLS.LIST_USERS,
+      arguments: {},
+    });
+
+    // Handle array response from MCP
+    if (!result.isError && Array.isArray(result.content)) {
+      return { ...result, content: result.content as PylonUser[] };
+    }
+
+    return result as MCPToolResult & { content: PylonUser[] | null };
+  }
+
+  async listTeams(): Promise<MCPToolResult & { content: PylonTeam[] | null }> {
+    const result = await this.callTool({
+      name: MCP_TOOLS.LIST_TEAMS,
+      arguments: {},
+    });
+
+    // Handle array response from MCP
+    if (!result.isError && Array.isArray(result.content)) {
+      return { ...result, content: result.content as PylonTeam[] };
+    }
+
+    return result as MCPToolResult & { content: PylonTeam[] | null };
   }
 }
 

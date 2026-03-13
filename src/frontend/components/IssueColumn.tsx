@@ -1,10 +1,11 @@
 import React from 'react';
-import type { TriagedIssue, Todo } from '../types';
+import type { TriagedIssue, Todo, Assignee } from '../types';
 import { IssueCard } from './IssueCard';
 
 interface IssueColumnProps {
   title: string;
   issues: TriagedIssue[];
+  userMap: Map<string, Assignee>;
   onTodoGenerated: (todo: Todo) => void;
   onIssueDeleted: (issueId: string) => void;
   emptyMessage?: string;
@@ -13,6 +14,7 @@ interface IssueColumnProps {
 export function IssueColumn({
   title,
   issues,
+  userMap,
   onTodoGenerated,
   onIssueDeleted,
   emptyMessage = 'No issues',
@@ -34,6 +36,7 @@ export function IssueColumn({
             <IssueCard
               key={issue.id}
               issue={issue}
+              userMap={userMap}
               onTodoGenerated={onTodoGenerated}
               onDeleted={onIssueDeleted}
             />

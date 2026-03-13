@@ -1,4 +1,4 @@
-import type { PylonIssue, TriagedIssue, DashboardStats, Priority } from '../types';
+import type { PylonIssue, TriagedIssue, DashboardStats, Priority, Assignee } from '../types';
 
 // Global KV reference (set per-request in worker)
 let kvNamespace: KVNamespace | null = null;
@@ -147,5 +147,23 @@ export const kvIssueStore = {
   async getIssuesByPriority(priority: Priority): Promise<TriagedIssue[]> {
     const all = await this.getAllIssues();
     return all.filter(i => i.status === 'triaged' && i.priority === priority);
+  },
+
+  async getAssignees(): Promise<Assignee[]> {
+    const data = await getData();
+    const assigneeMap = new Map<string, Assignee>();
+
+    for (const issue of Object.values(data.issues)) {
+      const assignee = issue.originalIssue.assignee;
+      if (assignee && assignee.id) {
+        assigneeMap.set(assignee.id, assignee);
+      }
+    }
+
+    return Array.from(assigneeMap.values()).sort((a, b) => {
+      const nameA = a.name || a.email || '';
+      const nameB = b.name || b.email || '';
+      return nameA.localeCompare(nameB);
+    });
   },
 };

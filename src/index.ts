@@ -5,6 +5,7 @@ import { serveStatic } from 'hono/bun';
 import { health } from './api/health';
 import { issues } from './api/issues';
 import { todos } from './api/todos';
+import { users } from './api/users';
 import { handlePylonWebhook, processRetryQueue } from './pylon/handler';
 
 const app = new Hono();
@@ -23,6 +24,7 @@ app.route('/health', health);
 // API routes
 app.route('/api/issues', issues);
 app.route('/api/todos', todos);
+app.route('/api/users', users);
 
 // Pylon webhook
 app.post('/api/pylon/webhook', handlePylonWebhook);

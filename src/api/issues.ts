@@ -18,6 +18,13 @@ issues.get('/', (c) => {
   return c.json(response);
 });
 
+// GET /api/issues/assignees - Get all unique assignees
+// NOTE: Must be defined before /:id to avoid matching "assignees" as an ID
+issues.get('/assignees', (c) => {
+  const assignees = issueStore.getAssignees();
+  return c.json({ assignees });
+});
+
 // GET /api/issues/:id - Fetch a single issue
 issues.get('/:id', (c) => {
   const id = c.req.param('id');
@@ -28,12 +35,6 @@ issues.get('/:id', (c) => {
   }
 
   return c.json(issue);
-});
-
-// GET /api/issues/assignees - Get all unique assignees
-issues.get('/assignees', (c) => {
-  const assignees = issueStore.getAssignees();
-  return c.json({ assignees });
 });
 
 // GET /api/issues/priority/:priority - Fetch issues by priority

@@ -1,18 +1,36 @@
-import React, { useState } from 'react';
-import type { Todo } from '../types';
+import React, { useState, useMemo } from 'react';
+import type { Todo, Assignee } from '../types';
 
 interface TodoCardProps {
   todo: Todo;
+  userMap: Map<string, Assignee>;
   onToggle: () => void;
   onDelete: () => void;
   onUpdate?: (updates: Partial<Todo>) => void;
 }
 
-export function TodoCard({ todo, onToggle, onDelete, onUpdate }: TodoCardProps) {
+export function TodoCard({ todo, userMap, onToggle, onDelete, onUpdate }: TodoCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(todo.title);
   const [editDescription, setEditDescription] = useState(todo.description);
   const [editSteps, setEditSteps] = useState<string[]>(todo.steps);
+
+  // Get enriched assignee data from userMap
+  const assignee = useMemo(() => {
+    const todoAssignee = todo.assignee;
+    if (!todoAssignee) return null;
+
+    // Look up the user in the userMap to get name/email
+    const user = userMap.get(todoAssignee.id);
+    if (user) {
+      return {
+        id: todoAssignee.id,
+        name: todoAssignee.name || user.name,
+        email: todoAssignee.email || user.email,
+      };
+    }
+    return todoAssignee;
+  }, [todo.assignee, userMap]);
 
   const handleSave = () => {
     if (onUpdate && editTitle.trim()) {
@@ -135,12 +153,12 @@ export function TodoCard({ todo, onToggle, onDelete, onUpdate }: TodoCardProps) 
         <span className={`todo-title ${todo.completed ? 'completed' : ''}`}>
           {todo.title}
         </span>
-        {todo.assignee && (
+        {assignee && (
           <span
             className="assignee-badge todo-assignee"
-            title={todo.assignee.email || ''}
+            title={assignee.email || ''}
           >
-            {todo.assignee.name || todo.assignee.email || 'Assigned'}
+            {assignee.name || assignee.email || 'Assigned'}
           </span>
         )}
         {onUpdate && (

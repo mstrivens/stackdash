@@ -19,6 +19,13 @@ export function createIssuesRoutes() {
     return c.json(response);
   });
 
+  // GET /api/issues/assignees - Get all unique assignees
+  // NOTE: Must be defined before /:id to avoid matching "assignees" as an ID
+  issues.get('/assignees', async (c) => {
+    const assignees = await kvIssueStore.getAssignees();
+    return c.json({ assignees });
+  });
+
   // GET /api/issues/:id - Fetch a single issue
   issues.get('/:id', async (c) => {
     const id = c.req.param('id');

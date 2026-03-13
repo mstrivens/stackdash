@@ -1,5 +1,5 @@
 import React from 'react';
-import type { TriagedIssue, Todo, DashboardStats } from '../types';
+import type { TriagedIssue, Todo, DashboardStats, Assignee } from '../types';
 import { IssueColumn } from './IssueColumn';
 import { TodoColumn } from './TodoColumn';
 import { StatsColumn } from './StatsColumn';
@@ -10,6 +10,7 @@ interface DashboardProps {
   todos: Todo[];
   lastUpdated: string | null;
   isLoading: boolean;
+  userMap: Map<string, Assignee>;
   onTodoGenerated: (todo: Todo) => void;
   onTodoToggle: (id: string) => void;
   onTodoDelete: (id: string) => void;
@@ -27,6 +28,7 @@ export function Dashboard({
   todos,
   lastUpdated,
   isLoading,
+  userMap,
   onTodoGenerated,
   onTodoToggle,
   onTodoDelete,
@@ -74,6 +76,7 @@ export function Dashboard({
       <IssueColumn
         title="Issues"
         issues={sortedIssues}
+        userMap={userMap}
         onTodoGenerated={onTodoGenerated}
         onIssueDeleted={onIssueDeleted}
         emptyMessage="No issues to show. Select a different assignee or wait for new issues."
@@ -81,6 +84,7 @@ export function Dashboard({
 
       <TodoColumn
         todos={todos}
+        userMap={userMap}
         onToggle={onTodoToggle}
         onDelete={onTodoDelete}
         onUpdate={onTodoUpdate}

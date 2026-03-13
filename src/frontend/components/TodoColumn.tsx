@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import type { Todo } from '../types';
+import type { Todo, Assignee } from '../types';
 import { TodoCard } from './TodoCard';
 
 interface TodoColumnProps {
   todos: Todo[];
+  userMap: Map<string, Assignee>;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onUpdate?: (id: string, updates: Partial<Todo>) => void;
@@ -15,6 +16,7 @@ interface TodoColumnProps {
 
 export function TodoColumn({
   todos,
+  userMap,
   onToggle,
   onDelete,
   onUpdate,
@@ -173,6 +175,7 @@ export function TodoColumn({
             <TodoCard
               key={todo.id}
               todo={todo}
+              userMap={userMap}
               onToggle={() => onToggle(todo.id)}
               onDelete={() => onDelete(todo.id)}
               onUpdate={onUpdate ? (updates) => onUpdate(todo.id, updates) : undefined}
