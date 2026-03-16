@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import type { TriagedIssue, Todo, Assignee } from '../types';
-import { generateTodo, deleteIssue } from '../hooks/useIssues';
+import type { TriagedIssue, Todo, Assignee, GenerateCustomerResponseResponse } from '../types';
+import { generateTodo, deleteIssue, generatePrompt, generateCustomerResponse } from '../hooks/useIssues';
 
 interface IssueCardProps {
   issue: TriagedIssue;
@@ -13,6 +13,11 @@ export function IssueCard({ issue, userMap, onTodoGenerated, onDeleted }: IssueC
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
+  const [isGeneratingResponse, setIsGeneratingResponse] = useState(false);
+  const [generatedPrompt, setGeneratedPrompt] = useState<string | null>(null);
+  const [generatedResponse, setGeneratedResponse] = useState<GenerateCustomerResponseResponse | null>(null);
+  const [copySuccess, setCopySuccess] = useState<'prompt' | 'response' | null>(null);
 
   // Get enriched assignee data from userMap
   // Check both top-level assignee and metadata.assignee (legacy data format)
@@ -58,6 +63,55 @@ export function IssueCard({ issue, userMap, onTodoGenerated, onDeleted }: IssueC
       onTodoGenerated(todo);
     } else {
       console.error('Failed to generate todo:', error);
+    }
+  };
+
+  const handleGeneratePrompt = async () => {
+    if (isGeneratingPrompt || issue.status !== 'triaged') return;
+
+    setIsGeneratingPrompt(true);
+    setGeneratedPrompt(null);
+    const result = await generatePrompt(issue.id);
+    setIsGeneratingPrompt(false);
+
+    if (result.error) {
+      console.error('Failed to generate prompt:', result.error);
+    } else {
+      setGeneratedPrompt(result.prompt);
+    }
+  };
+
+  const handleGenerateResponse = async () => {
+    if (isGeneratingResponse || issue.status !== 'triaged') return;
+
+    setIsGeneratingResponse(true);
+    setGeneratedResponse(null);
+    const result = await generateCustomerResponse(issue.id);
+    setIsGeneratingResponse(false);
+
+    if (result.error) {
+      console.error('Failed to generate response:', result.error);
+    } else {
+      setGeneratedResponse(result);
+    }
+  };
+
+  const handleCopyToClipboard = async (text: string, type: 'prompt' | 'response') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopySuccess(type);
+      setTimeout(() => setCopySuccess(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+    }
+  };
+
+  const getResponseTypeLabel = (type: string) => {
+    switch (type) {
+      case 'holding': return 'Holding Message';
+      case 'request_info': return 'Request Info';
+      case 'resolution': return 'Resolution';
+      default: return type;
     }
   };
 
@@ -145,30 +199,147 @@ export function IssueCard({ issue, userMap, onTodoGenerated, onDeleted }: IssueC
       </div>
 
       {issue.status === 'triaged' && (
-        <div className="issue-actions">
-          <button
-            className="btn btn-primary"
-            onClick={handleCreateTodo}
-            disabled={isGenerating}
-          >
-            {isGenerating ? (
-              <>
-                <span className="spinner spinner-sm" />
-                Creating...
-              </>
-            ) : (
-              '+ Create To-Do'
-            )}
-          </button>
-          {pylonLink && (
-            <a
-              href={pylonLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-secondary"
+        <div className="issue-actions-container">
+          <div className="issue-actions">
+            <button
+              className="btn btn-primary"
+              onClick={handleCreateTodo}
+              disabled={isGenerating}
             >
-              View in Pylon
-            </a>
+              {isGenerating ? (
+                <>
+                  <span className="spinner spinner-sm" />
+                  Creating...
+                </>
+              ) : (
+                '+ Create To-Do'
+              )}
+            </button>
+            {pylonLink && (
+              <a
+                href={pylonLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-secondary"
+              >
+                View in Pylon
+              </a>
+            )}
+          </div>
+
+          <div className="issue-actions">
+            <button
+              className="btn btn-secondary"
+              onClick={handleGeneratePrompt}
+              disabled={isGeneratingPrompt}
+            >
+              {isGeneratingPrompt ? (
+                <>
+                  <span className="spinner spinner-sm" />
+                  Generating...
+                </>
+              ) : (
+                'Generate Prompt'
+              )}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={handleGenerateResponse}
+              disabled={isGeneratingResponse}
+            >
+              {isGeneratingResponse ? (
+                <>
+                  <span className="spinner spinner-sm" />
+                  Drafting...
+                </>
+              ) : (
+                'Draft Response'
+              )}
+            </button>
+          </div>
+
+          {generatedPrompt && (
+            <div className="generated-content">
+              <div className="generated-header">
+                <span className="generated-title">Investigation Prompt</span>
+                <div className="generated-actions">
+                  <button
+                    className="btn btn-sm btn-copy"
+                    onClick={() => handleCopyToClipboard(generatedPrompt, 'prompt')}
+                  >
+                    {copySuccess === 'prompt' ? 'Copied!' : 'Copy'}
+                  </button>
+                  <button
+                    className="btn-close-generated"
+                    onClick={() => setGeneratedPrompt(null)}
+                    title="Dismiss"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              <textarea
+                className="generated-textarea"
+                value={generatedPrompt}
+                readOnly
+                rows={8}
+              />
+            </div>
+          )}
+
+            {generatedResponse && (
+            <div className="generated-content">
+              <div className="generated-header">
+                <span className={`response-type-badge ${generatedResponse.responseType}`}>
+                  {getResponseTypeLabel(generatedResponse.responseType)}
+                </span>
+                <div className="generated-actions">
+                  <button
+                    className="btn btn-sm btn-copy"
+                    onClick={() => handleCopyToClipboard(generatedResponse.message, 'response')}
+                  >
+                    {copySuccess === 'response' ? 'Copied!' : 'Copy'}
+                  </button>
+                  <button
+                    className="btn-close-generated"
+                    onClick={() => setGeneratedResponse(null)}
+                    title="Dismiss"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              <div className="response-reasoning">
+                {generatedResponse.reasoning}
+              </div>
+              {generatedResponse.infoNeeded && generatedResponse.infoNeeded.length > 0 && (
+                <div className="response-info-needed">
+                  <strong>Info Needed:</strong>
+                  <ul>
+                    {generatedResponse.infoNeeded.map((item, i) => (
+                      <li key={i}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <textarea
+                className="generated-textarea"
+                value={generatedResponse.message}
+                readOnly
+                rows={6}
+              />
+              {pylonLink && (
+                <a
+                  href={pylonLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-primary btn-sm"
+                  style={{ marginTop: '8px' }}
+                >
+                  Open in Pylon to Send
+                </a>
+              )}
+            </div>
           )}
         </div>
       )}

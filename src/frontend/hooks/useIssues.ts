@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { TriagedIssue, DashboardStats, IssuesResponse, Assignee } from '../types';
+import type {
+  TriagedIssue,
+  DashboardStats,
+  IssuesResponse,
+  Assignee,
+  GeneratePromptResponse,
+  GenerateCustomerResponseResponse,
+} from '../types';
 
 const POLL_INTERVAL = 5000; // 5 seconds
 
@@ -147,5 +154,59 @@ export async function generateTodo(issueId: string): Promise<{ todo: any; error?
     return { todo: data.todo };
   } catch (err) {
     return { todo: null, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+}
+
+// Generate investigation prompt for Claude Code
+export async function generatePrompt(issueId: string): Promise<GeneratePromptResponse & { error?: string }> {
+  try {
+    const response = await fetch('/api/generate/prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ issueId }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      return { prompt: '', issueTitle: '', error: data.error || 'Failed to generate prompt' };
+    }
+
+    const data: GeneratePromptResponse = await response.json();
+    return data;
+  } catch (err) {
+    return { prompt: '', issueTitle: '', error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+}
+
+// Generate customer response
+export async function generateCustomerResponse(
+  issueId: string
+): Promise<GenerateCustomerResponseResponse & { error?: string }> {
+  try {
+    const response = await fetch('/api/generate/response', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ issueId }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      return {
+        responseType: 'holding',
+        reasoning: '',
+        message: '',
+        error: data.error || 'Failed to generate response',
+      };
+    }
+
+    const data: GenerateCustomerResponseResponse = await response.json();
+    return data;
+  } catch (err) {
+    return {
+      responseType: 'holding',
+      reasoning: '',
+      message: '',
+      error: err instanceof Error ? err.message : 'Unknown error',
+    };
   }
 }

@@ -117,3 +117,27 @@ export interface TriageResult {
   investigationOutline: string[];
   additionalContext?: Record<string, unknown>;
 }
+
+// Request/Response for investigation prompt generation
+export interface GeneratePromptRequest {
+  issueId: string;
+}
+
+export interface GeneratePromptResponse {
+  prompt: string;
+  issueTitle: string;
+}
+
+// Request/Response for customer response generation
+export interface GenerateCustomerResponseRequest {
+  issueId: string;
+}
+
+export type CustomerResponseType = 'holding' | 'request_info' | 'resolution';
+
+export interface GenerateCustomerResponseResponse {
+  responseType: CustomerResponseType;
+  reasoning: string;
+  message: string;
+  infoNeeded?: string[];  // If responseType is 'request_info'
+}

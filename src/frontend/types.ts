@@ -68,3 +68,18 @@ export interface IssuesResponse {
   stats: DashboardStats;
   lastUpdated: string;
 }
+
+// Generation types
+export interface GeneratePromptResponse {
+  prompt: string;
+  issueTitle: string;
+}
+
+export type CustomerResponseType = 'holding' | 'request_info' | 'resolution';
+
+export interface GenerateCustomerResponseResponse {
+  responseType: CustomerResponseType;
+  reasoning: string;
+  message: string;
+  infoNeeded?: string[];
+}

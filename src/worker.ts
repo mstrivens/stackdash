@@ -4,6 +4,7 @@ import { health } from './api/health';
 import { createIssuesRoutes } from './api/issues-kv';
 import { createTodosRoutes } from './api/todos-kv';
 import { createUsersRoutes } from './api/users-kv';
+import { createGenerationRoutes } from './api/generation-kv';
 import { createWebhookHandler } from './pylon/handler-kv';
 import { setMCPEnv } from './mcp/client';
 import { setKVNamespace } from './store/kv-issues';
@@ -48,6 +49,7 @@ app.route('/health', health);
 app.route('/api/issues', createIssuesRoutes());
 app.route('/api/todos', createTodosRoutes());
 app.route('/api/users', createUsersRoutes());
+app.route('/api/generate', createGenerationRoutes());
 
 // Pylon webhook (KV-backed)
 app.post('/api/pylon/webhook', createWebhookHandler());
