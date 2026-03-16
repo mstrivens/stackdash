@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { basicAuth } from 'hono/basic-auth';
 import { health } from './api/health';
 import { createIssuesRoutes } from './api/issues-kv';
 import { createTodosRoutes } from './api/todos-kv';
@@ -19,6 +20,7 @@ type Bindings = {
   STACKONE_ACCOUNT_ID: string;
   STACKONE_FIREFLIES_ACCOUNT_ID?: string;
   PYLON_WEBHOOK_SECRET?: string;
+  DASHBOARD_PASSWORD?: string;
   ISSUES_KV: KVNamespace;
   ASSETS?: {
     fetch: (request: Request) => Promise<Response>;
@@ -35,6 +37,29 @@ app.use('*', async (c, next) => {
   setAgentEnv(c.env);
   setVerifyEnv(c.env);
   await next();
+});
+
+// Password protection (skip health check and webhook)
+app.use('*', async (c, next) => {
+  const path = new URL(c.req.url).pathname;
+
+  // Skip auth for health check and webhook
+  if (path === '/health' || path === '/api/pylon/webhook') {
+    return next();
+  }
+
+  // Skip auth if no password is configured
+  if (!c.env.DASHBOARD_PASSWORD) {
+    return next();
+  }
+
+  // Apply basic auth
+  const auth = basicAuth({
+    username: 'admin',
+    password: c.env.DASHBOARD_PASSWORD,
+  });
+
+  return auth(c, next);
 });
 
 // Middleware
