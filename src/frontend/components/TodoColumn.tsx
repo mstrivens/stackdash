@@ -5,12 +5,14 @@ import { TodoCard } from './TodoCard';
 interface TodoColumnProps {
   todos: Todo[];
   userMap: Map<string, Assignee>;
+  selectedAssignee: Assignee | null;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onUpdate?: (id: string, updates: Partial<Todo>) => void;
   onCreateManual?: (title: string, description?: string, steps?: string[]) => void;
   onClearCompleted: () => void;
   onReorder: (draggedId: string, targetId: string) => void;
+  onImportMeetingActions?: (userEmail: string, userName: string, options: { days?: number; limit?: number }) => Promise<{ added: number; skipped: number; message: string }>;
   pendingCount: number;
   completedCount: number;
 }
@@ -18,12 +20,14 @@ interface TodoColumnProps {
 export function TodoColumn({
   todos,
   userMap,
+  selectedAssignee,
   onToggle,
   onDelete,
   onUpdate,
   onCreateManual,
   onClearCompleted,
   onReorder,
+  onImportMeetingActions,
   pendingCount,
   completedCount,
 }: TodoColumnProps) {
@@ -33,6 +37,9 @@ export function TodoColumn({
   const [newSteps, setNewSteps] = useState<string[]>([]);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ added: number; skipped: number; message: string } | null>(null);
+  const [importRange, setImportRange] = useState<string>('3-days');
 
   const handleDragStart = (id: string) => {
     setDraggedId(id);
@@ -98,12 +105,66 @@ export function TodoColumn({
     setNewSteps(updated);
   };
 
+  const handleImportMeetings = async () => {
+    if (!onImportMeetingActions || isImporting || !selectedAssignee?.email || !selectedAssignee?.name) return;
+
+    setIsImporting(true);
+    setImportResult(null);
+
+    // Parse the import range
+    const [value, type] = importRange.split('-');
+    const options = type === 'days'
+      ? { days: parseInt(value, 10) }
+      : { limit: parseInt(value, 10) };
+
+    try {
+      const result = await onImportMeetingActions(selectedAssignee.email, selectedAssignee.name, options);
+      setImportResult(result);
+      // Clear the result message after 5 seconds
+      setTimeout(() => setImportResult(null), 5000);
+    } catch (err) {
+      setImportResult({
+        added: 0,
+        skipped: 0,
+        message: err instanceof Error ? err.message : 'Import failed',
+      });
+      setTimeout(() => setImportResult(null), 5000);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Only show import button when a specific user with email is selected
+  const canImportMeetings = onImportMeetingActions && selectedAssignee?.email && selectedAssignee?.name;
+
   return (
     <div className="column">
       <div className="column-header">
         <h2 className="column-title">To-Do List</h2>
         <div className="column-header-actions">
           <span className="column-count">{pendingCount} pending</span>
+          {canImportMeetings && (
+            <div className="import-btn-group">
+              <button
+                className="import-btn-main"
+                onClick={handleImportMeetings}
+                disabled={isImporting}
+                title={`Import action items from ${selectedAssignee?.name}'s recent meetings`}
+              >
+                {isImporting ? 'Importing...' : 'Import Meetings'}
+              </button>
+              <select
+                className="import-btn-select"
+                value={importRange}
+                onChange={(e) => setImportRange(e.target.value)}
+                disabled={isImporting}
+              >
+                <option value="1-days">1d</option>
+                <option value="3-days">3d</option>
+                <option value="7-days">7d</option>
+              </select>
+            </div>
+          )}
           {onCreateManual && !isCreating && (
             <button
               className="btn btn-primary btn-sm"
@@ -122,6 +183,12 @@ export function TodoColumn({
           )}
         </div>
       </div>
+      {importResult && (
+        <div className={`import-result ${importResult.added > 0 ? 'import-success' : 'import-info'}`}>
+          {importResult.message}
+          {importResult.skipped > 0 && ` (${importResult.skipped} duplicates skipped)`}
+        </div>
+      )}
       <div className="column-content">
         {isCreating && (
           <div className="todo-add-form">

@@ -7,6 +7,7 @@ import { issues } from './api/issues';
 import { todos } from './api/todos';
 import { users } from './api/users';
 import { generation } from './api/generation';
+import { meetings } from './api/meetings';
 import { handlePylonWebhook, processRetryQueue } from './pylon/handler';
 
 const app = new Hono();
@@ -27,6 +28,7 @@ app.route('/api/issues', issues);
 app.route('/api/todos', todos);
 app.route('/api/users', users);
 app.route('/api/generate', generation);
+app.route('/api/meetings', meetings);
 
 // Pylon webhook
 app.post('/api/pylon/webhook', handlePylonWebhook);

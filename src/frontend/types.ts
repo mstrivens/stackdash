@@ -50,6 +50,7 @@ export interface Todo {
   completedAt?: string;
   completed: boolean;
   assignee?: Assignee;
+  sourceId?: string; // External source ID for deduplication (e.g., meeting transcript ID)
 }
 
 export interface DashboardStats {

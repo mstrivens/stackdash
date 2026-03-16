@@ -6,12 +6,14 @@ const STORAGE_KEY = 'stackdash_todos';
 interface UseTodosReturn {
   todos: Todo[];
   addTodo: (todo: Todo) => void;
+  addTodos: (todos: Todo[]) => void;
   toggleTodo: (id: string) => void;
   deleteTodo: (id: string) => void;
   updateTodo: (id: string, updates: Partial<Todo>) => void;
   createManualTodo: (title: string, description?: string, steps?: string[]) => void;
   clearCompleted: () => void;
   reorderTodos: (draggedId: string, targetId: string) => void;
+  getSourceIds: () => string[];
   pendingCount: number;
   completedCount: number;
 }
@@ -44,13 +46,33 @@ export function useTodos(): UseTodosReturn {
 
   const addTodo = useCallback((todo: Todo) => {
     setTodos(prev => {
-      // Check for duplicate
-      if (prev.some(t => t.id === todo.id)) {
+      // Check for duplicate by id or sourceId
+      if (prev.some(t => t.id === todo.id || (todo.sourceId && t.sourceId === todo.sourceId))) {
         return prev;
       }
       return [todo, ...prev];
     });
   }, []);
+
+  const addTodos = useCallback((newTodos: Todo[]) => {
+    setTodos(prev => {
+      const existingIds = new Set(prev.map(t => t.id));
+      const existingSourceIds = new Set(prev.map(t => t.sourceId).filter(Boolean));
+
+      // Filter out duplicates
+      const uniqueNewTodos = newTodos.filter(todo =>
+        !existingIds.has(todo.id) &&
+        !(todo.sourceId && existingSourceIds.has(todo.sourceId))
+      );
+
+      if (uniqueNewTodos.length === 0) return prev;
+      return [...uniqueNewTodos, ...prev];
+    });
+  }, []);
+
+  const getSourceIds = useCallback(() => {
+    return todos.map(t => t.sourceId).filter((id): id is string => !!id);
+  }, [todos]);
 
   const toggleTodo = useCallback((id: string) => {
     setTodos(prev =>
@@ -115,12 +137,14 @@ export function useTodos(): UseTodosReturn {
   return {
     todos,
     addTodo,
+    addTodos,
     toggleTodo,
     deleteTodo,
     updateTodo,
     createManualTodo,
     clearCompleted,
     reorderTodos,
+    getSourceIds,
     pendingCount,
     completedCount,
   };

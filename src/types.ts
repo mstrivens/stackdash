@@ -47,9 +47,10 @@ export interface TriagedIssue {
 
 // To-do item generated from an issue or created manually
 // For manually created todos, issueId is set to 'manual'
+// For meeting-sourced todos, issueId is set to 'meeting'
 export interface Todo {
   id: string;
-  issueId: string; // Set to 'manual' for manually created todos
+  issueId: string; // Set to 'manual' for manually created todos, 'meeting' for meeting-sourced
   title: string;
   description: string;
   steps: string[];
@@ -57,6 +58,7 @@ export interface Todo {
   completedAt?: string;
   completed: boolean;
   assignee?: Assignee;
+  sourceId?: string; // External source ID for deduplication (e.g., meeting transcript ID)
 }
 
 // Dashboard statistics

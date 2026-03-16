@@ -17,12 +17,14 @@ function App() {
   const {
     todos,
     addTodo,
+    addTodos,
     toggleTodo,
     deleteTodo,
     updateTodo,
     createManualTodo,
     clearCompleted,
     reorderTodos,
+    getSourceIds,
     pendingCount,
     completedCount,
   } = useTodos();
@@ -57,6 +59,47 @@ function App() {
   const handleIssueDeleted = () => {
     refetch();
   };
+
+  const handleImportMeetingActions = async (
+    userEmail: string,
+    userName: string,
+    options: { days?: number; limit?: number }
+  ): Promise<{ added: number; skipped: number; message: string }> => {
+    const existingSourceIds = getSourceIds();
+    const response = await fetch('/api/meetings/import-actions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ existingSourceIds, userEmail, userName, ...options }),
+    });
+
+    const data = await response.json() as {
+      success?: boolean;
+      todos?: Todo[];
+      skippedDuplicates?: string[];
+      message?: string;
+      error?: string;
+    };
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to import meeting actions');
+    }
+
+    if (data.todos && data.todos.length > 0) {
+      addTodos(data.todos);
+    }
+
+    return {
+      added: data.todos?.length || 0,
+      skipped: data.skippedDuplicates?.length || 0,
+      message: data.message || '',
+    };
+  };
+
+  // Get the selected assignee object for passing to components
+  const selectedAssigneeObj = useMemo(() => {
+    if (!selectedAssignee || selectedAssignee === 'unassigned') return null;
+    return assignees.find(a => a.id === selectedAssignee) || null;
+  }, [selectedAssignee, assignees]);
 
   const selectedAssigneeName = useMemo(() => {
     if (selectedAssignee === null) return null;
@@ -97,6 +140,7 @@ function App() {
         lastUpdated={lastUpdated}
         isLoading={isLoading}
         userMap={userMap}
+        selectedAssignee={selectedAssigneeObj}
         onTodoGenerated={handleTodoGenerated}
         onTodoToggle={toggleTodo}
         onTodoDelete={deleteTodo}
@@ -105,6 +149,7 @@ function App() {
         onClearCompleted={clearCompleted}
         onTodoReorder={reorderTodos}
         onIssueDeleted={handleIssueDeleted}
+        onImportMeetingActions={handleImportMeetingActions}
         pendingTodoCount={filteredTodos.filter(t => !t.completed).length}
         completedTodoCount={filteredTodos.filter(t => t.completed).length}
       />

@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { PylonIssue, TriageResult, Priority, CustomerTier, Todo, CustomerResponseType } from '../types';
+import type { PylonIssue, TriageResult, Priority, CustomerTier, Todo, CustomerResponseType, Assignee } from '../types';
 import type { PylonMCPIssue } from '../pylon/types';
-import { mcpClient } from '../mcp/client';
+import { mcpClient, type FirefliesTranscript, type FirefliesMeetingSummary } from '../mcp/client';
 
 // Global env storage for Workers compatibility
 let globalEnv: Record<string, string | undefined> = {};
@@ -576,4 +576,178 @@ Draft a response in JSON format.`;
       message: `Hi ${customerName},\n\nThank you for reaching out. We've received your issue and our team is looking into it. We'll get back to you with an update soon.\n\nBest regards,\nStackOne Support`,
     };
   }
+}
+
+// Meeting action item extracted from a transcript
+export interface MeetingActionItem {
+  title: string;
+  description: string;
+  assigneeName: string; // Name as mentioned in the meeting
+  meetingTitle: string;
+  meetingDate: string;
+  transcriptId: string;
+}
+
+// Extract action items from meeting summary that mention specific people
+export async function extractMeetingActions(
+  transcript: FirefliesTranscript,
+  summary: FirefliesMeetingSummary,
+  seNames: string[] // List of SE names to look for
+): Promise<MeetingActionItem[]> {
+  // Build the context from the meeting
+  const dateStr = transcript.dateString ||
+    (transcript.date ? new Date(transcript.date).toISOString() : 'Unknown date');
+
+  // Get participant names from speakers array or participants emails
+  const participantNames = transcript.speakers?.map(s => s.name).join(', ') ||
+    transcript.participants?.join(', ') ||
+    'Unknown';
+
+  const meetingContext = {
+    title: transcript.title,
+    date: dateStr,
+    participants: participantNames,
+    overview: summary.summary?.overview || '',
+    actionItems: summary.summary?.action_items || '', // This is a markdown string
+    shorthandBullets: summary.summary?.shorthand_bullet || '',
+    gist: summary.summary?.gist || '',
+  };
+
+  // Create a lower-case set of SE names for matching
+  const seNamesLower = seNames.map(n => n.toLowerCase());
+
+  const systemPrompt = `You are an assistant that extracts action items from meeting summaries.
+Given a meeting summary and a list of team member names, identify any explicit action items or tasks assigned to these specific people.
+
+IMPORTANT:
+- Only extract actions that EXPLICITLY mention one of the team members by name
+- The action must be clearly assigned to them (e.g., "Max will...", "Action item for Sarah:", "**Max Strivens**" followed by tasks)
+- Do NOT infer or assume assignments - only extract explicit mentions
+- If no actions are explicitly assigned to the listed team members, return an empty array
+
+Team members to look for: ${seNames.join(', ')}
+
+Respond in JSON format:
+{
+  "actions": [
+    {
+      "title": "Brief action title (max 10 words)",
+      "description": "What needs to be done",
+      "assigneeName": "Name of the person assigned (must match one of the team members)"
+    }
+  ]
+}
+
+If there are no actions for the listed team members, respond with:
+{ "actions": [] }`;
+
+  const userPrompt = `Extract action items from this meeting:
+
+Meeting: ${meetingContext.title}
+Date: ${meetingContext.date}
+Participants: ${meetingContext.participants}
+
+## Summary
+${meetingContext.overview}
+
+## Action Items from Meeting
+${meetingContext.actionItems || 'None listed'}
+
+## Key Points
+${meetingContext.shorthandBullets || meetingContext.gist}
+
+Extract any action items explicitly assigned to: ${seNames.join(', ')}`;
+
+  try {
+    const response = await getAnthropicClient().messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      messages: [
+        { role: 'user', content: userPrompt },
+      ],
+      system: systemPrompt,
+    });
+
+    const textBlock = response.content.find(block => block.type === 'text');
+    if (!textBlock || textBlock.type !== 'text') {
+      throw new Error('No text response from Claude');
+    }
+
+    const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No JSON found in response');
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      actions: Array<{
+        title: string;
+        description: string;
+        assigneeName: string;
+      }>;
+    };
+
+    console.log(`Claude extracted ${parsed.actions.length} raw actions:`, parsed.actions.map(a => a.assigneeName));
+    console.log(`Matching against SE names:`, seNames);
+
+    // Filter to only include actions for known SE names
+    // Use partial matching - the action assignee name should contain one of the SE names
+    // (e.g., "Max Strivens" contains "Max")
+    const matchedActions = parsed.actions.filter(action => {
+      const actionNameLower = action.assigneeName.toLowerCase();
+      const match = seNamesLower.some(seName =>
+        actionNameLower.includes(seName) || seName.includes(actionNameLower)
+      );
+      if (!match) {
+        console.log(`No match for "${action.assigneeName}" against [${seNames.join(', ')}]`);
+      }
+      return match;
+    });
+
+    console.log(`After filtering: ${matchedActions.length} actions matched`);
+
+    return matchedActions.map(action => ({
+      title: action.title,
+      description: action.description,
+      assigneeName: action.assigneeName,
+      meetingTitle: transcript.title,
+      meetingDate: meetingContext.date,
+      transcriptId: transcript.id,
+    }));
+  } catch (error) {
+    console.error('Meeting action extraction failed:', error);
+    return [];
+  }
+}
+
+// Convert meeting action items to todos
+export function meetingActionsToTodos(
+  actions: MeetingActionItem[],
+  userMap: Map<string, Assignee>
+): Todo[] {
+  return actions.map(action => {
+    // Try to find the assignee by name (case-insensitive, partial match)
+    const assigneeNameLower = action.assigneeName.toLowerCase();
+    let assignee: Assignee | undefined;
+
+    for (const [, user] of userMap) {
+      const userNameLower = user.name?.toLowerCase() || '';
+      // Match if either name contains the other (e.g., "Max" matches "Max Strivens")
+      if (userNameLower && (assigneeNameLower.includes(userNameLower) || userNameLower.includes(assigneeNameLower))) {
+        assignee = user;
+        break;
+      }
+    }
+
+    return {
+      id: `meeting-${action.transcriptId}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      issueId: 'meeting',
+      title: action.title,
+      description: `${action.description}\n\nFrom meeting: ${action.meetingTitle} (${action.meetingDate})`,
+      steps: [],
+      createdAt: new Date().toISOString(),
+      completed: false,
+      assignee,
+      sourceId: `fireflies:${action.transcriptId}:${action.title.toLowerCase().replace(/\s+/g, '-').slice(0, 50)}`,
+    };
+  });
 }

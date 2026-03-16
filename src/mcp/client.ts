@@ -32,6 +32,46 @@ export const MCP_TOOLS = {
   LIST_TEAMS: 'pylon_list_teams',
 } as const;
 
+// Available MCP tools for Fireflies
+export const FIREFLIES_TOOLS = {
+  LIST_TRANSCRIPTS: 'fireflies_list_transcripts',
+  GET_TRANSCRIPT: 'fireflies_get_transcript',
+  GET_MEETING_SUMMARY: 'fireflies_get_meeting_summary',
+  SEARCH_MEETINGS: 'fireflies_search_meetings',
+} as const;
+
+// Fireflies transcript type (from list endpoint)
+export interface FirefliesTranscript {
+  id: string;
+  title: string;
+  date?: number; // timestamp in ms
+  dateString?: string;
+  duration?: number;
+  host_email?: string | null;
+  organizer_email?: string;
+  meeting_link?: string;
+  speakers?: Array<{ id: number; name: string }>;
+  participants?: string[]; // email addresses
+  fireflies_users?: string[];
+}
+
+// Fireflies meeting summary type (from get_meeting_summary endpoint)
+export interface FirefliesMeetingSummary {
+  id: string;
+  title: string;
+  date?: number;
+  summary: {
+    action_items?: string; // Markdown-formatted string with action items by person
+    keywords?: string[];
+    outline?: string | null;
+    shorthand_bullet?: string;
+    overview?: string;
+    bullet_gist?: string;
+    gist?: string;
+    short_summary?: string;
+  };
+}
+
 let requestId = 0;
 
 // Global env storage for Workers compatibility
@@ -315,6 +355,75 @@ export class StackOneMCPClient {
     }
 
     return result as MCPToolResult & { content: PylonTeam[] | null };
+  }
+
+  // Call a tool with a different account ID (for Fireflies, etc.)
+  async callToolWithAccount(toolCall: MCPToolCall, accountId: string): Promise<MCPToolResult> {
+    const originalAccountId = this.accountId;
+    this.accountId = accountId;
+    try {
+      return await this.callTool(toolCall);
+    } finally {
+      this.accountId = originalAccountId;
+    }
+  }
+
+  // Fireflies: List recent transcripts
+  async listFirefliesTranscripts(
+    accountId: string,
+    options?: { limit?: number; fromDate?: string; toDate?: string; userEmail?: string }
+  ): Promise<MCPToolResult & { content: FirefliesTranscript[] | null }> {
+    // Arguments need to be wrapped in 'query' for list endpoints
+    const query: Record<string, unknown> = {};
+    if (options?.limit) query.limit = options.limit;
+    if (options?.fromDate) query.from_date = options.fromDate;
+    if (options?.toDate) query.to_date = options.toDate;
+    if (options?.userEmail) query.user_email = options.userEmail;
+
+    const result = await this.callToolWithAccount(
+      { name: FIREFLIES_TOOLS.LIST_TRANSCRIPTS, arguments: { query } },
+      accountId
+    );
+
+    if (!result.isError && Array.isArray(result.content)) {
+      return { ...result, content: result.content as FirefliesTranscript[] };
+    }
+
+    return result as MCPToolResult & { content: FirefliesTranscript[] | null };
+  }
+
+  // Fireflies: Get meeting summary with action items
+  async getFirefliesMeetingSummary(
+    accountId: string,
+    transcriptId: string
+  ): Promise<MCPToolResult & { content: FirefliesMeetingSummary | null }> {
+    // Arguments need to be wrapped in 'body' with transcriptId
+    const result = await this.callToolWithAccount(
+      {
+        name: FIREFLIES_TOOLS.GET_MEETING_SUMMARY,
+        arguments: { body: { transcriptId } },
+      },
+      accountId
+    );
+
+    return result as MCPToolResult & { content: FirefliesMeetingSummary | null };
+  }
+
+  // Fireflies: Get full transcript
+  async getFirefliesTranscript(
+    accountId: string,
+    transcriptId: string
+  ): Promise<MCPToolResult & { content: FirefliesTranscript | null }> {
+    // Arguments need to be wrapped in 'body' with transcriptId
+    const result = await this.callToolWithAccount(
+      {
+        name: FIREFLIES_TOOLS.GET_TRANSCRIPT,
+        arguments: { body: { transcriptId } },
+      },
+      accountId
+    );
+
+    return result as MCPToolResult & { content: FirefliesTranscript | null };
   }
 }
 

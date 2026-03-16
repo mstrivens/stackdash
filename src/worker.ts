@@ -5,6 +5,7 @@ import { createIssuesRoutes } from './api/issues-kv';
 import { createTodosRoutes } from './api/todos-kv';
 import { createUsersRoutes } from './api/users-kv';
 import { createGenerationRoutes } from './api/generation-kv';
+import { createMeetingsRoutes } from './api/meetings-kv';
 import { createWebhookHandler } from './pylon/handler-kv';
 import { setMCPEnv } from './mcp/client';
 import { setKVNamespace } from './store/kv-issues';
@@ -16,6 +17,7 @@ type Bindings = {
   ANTHROPIC_API_KEY: string;
   STACKONE_API_KEY: string;
   STACKONE_ACCOUNT_ID: string;
+  STACKONE_FIREFLIES_ACCOUNT_ID?: string;
   PYLON_WEBHOOK_SECRET?: string;
   ISSUES_KV: KVNamespace;
   ASSETS?: {
@@ -50,6 +52,7 @@ app.route('/api/issues', createIssuesRoutes());
 app.route('/api/todos', createTodosRoutes());
 app.route('/api/users', createUsersRoutes());
 app.route('/api/generate', createGenerationRoutes());
+app.route('/api/meetings', createMeetingsRoutes());
 
 // Pylon webhook (KV-backed)
 app.post('/api/pylon/webhook', createWebhookHandler());

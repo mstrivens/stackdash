@@ -11,6 +11,7 @@ interface DashboardProps {
   lastUpdated: string | null;
   isLoading: boolean;
   userMap: Map<string, Assignee>;
+  selectedAssignee: Assignee | null;
   onTodoGenerated: (todo: Todo) => void;
   onTodoToggle: (id: string) => void;
   onTodoDelete: (id: string) => void;
@@ -19,6 +20,7 @@ interface DashboardProps {
   onClearCompleted: () => void;
   onTodoReorder: (draggedId: string, targetId: string) => void;
   onIssueDeleted: (issueId: string) => void;
+  onImportMeetingActions?: (userEmail: string, userName: string, options: { days?: number; limit?: number }) => Promise<{ added: number; skipped: number; message: string }>;
   pendingTodoCount: number;
   completedTodoCount: number;
 }
@@ -30,6 +32,7 @@ export function Dashboard({
   lastUpdated,
   isLoading,
   userMap,
+  selectedAssignee,
   onTodoGenerated,
   onTodoToggle,
   onTodoDelete,
@@ -38,6 +41,7 @@ export function Dashboard({
   onClearCompleted,
   onTodoReorder,
   onIssueDeleted,
+  onImportMeetingActions,
   pendingTodoCount,
   completedTodoCount,
 }: DashboardProps) {
@@ -87,12 +91,14 @@ export function Dashboard({
       <TodoColumn
         todos={todos}
         userMap={userMap}
+        selectedAssignee={selectedAssignee}
         onToggle={onTodoToggle}
         onDelete={onTodoDelete}
         onUpdate={onTodoUpdate}
         onCreateManual={onTodoCreateManual}
         onClearCompleted={onClearCompleted}
         onReorder={onTodoReorder}
+        onImportMeetingActions={onImportMeetingActions}
         pendingCount={pendingTodoCount}
         completedCount={completedTodoCount}
       />
