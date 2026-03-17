@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { kvIssueStore } from '../store/kv-issues';
+import { d1IssueStore } from '../store/d1-issues';
 import { generateInvestigationPrompt, generateCustomerResponse } from '../agent';
 import type {
   GeneratePromptRequest,
@@ -25,7 +25,7 @@ export function createGenerationRoutes() {
       return c.json({ error: 'issueId is required' }, 400);
     }
 
-    const issue = await kvIssueStore.getIssue(body.issueId);
+    const issue = await d1IssueStore.getIssue(body.issueId);
     if (!issue) {
       return c.json({ error: 'Issue not found' }, 404);
     }
@@ -70,7 +70,7 @@ export function createGenerationRoutes() {
       return c.json({ error: 'issueId is required' }, 400);
     }
 
-    const issue = await kvIssueStore.getIssue(body.issueId);
+    const issue = await d1IssueStore.getIssue(body.issueId);
     if (!issue) {
       return c.json({ error: 'Issue not found' }, 404);
     }

@@ -1,13 +1,19 @@
 import { Hono } from 'hono';
 import { mcpClient } from '../mcp/client';
-import { kvUserStore } from '../store/kv-users';
+import { d1UserStore } from '../store/d1-users';
 import { extractMeetingActions, meetingActionsToTodos } from '../agent';
 import type { Todo, Assignee } from '../types';
 
+// Module-level env storage for Cloudflare Workers
+let meetingsEnv: { STACKONE_FIREFLIES_ACCOUNT_ID?: string } = {};
+
+export function setMeetingsEnv(env: { STACKONE_FIREFLIES_ACCOUNT_ID?: string }) {
+  meetingsEnv = env;
+}
+
 // Get Fireflies account ID from env
 function getFirefliesAccountId(): string {
-  const env = typeof process !== 'undefined' ? process.env : {};
-  return env.STACKONE_FIREFLIES_ACCOUNT_ID || '';
+  return meetingsEnv.STACKONE_FIREFLIES_ACCOUNT_ID || '';
 }
 
 export function createMeetingsRoutes() {
@@ -51,9 +57,12 @@ export function createMeetingsRoutes() {
       );
 
       if (transcriptsResult.isError || !transcriptsResult.content) {
+        const debugInfo = mcpClient.getLastRequestDebug();
         console.error('Failed to fetch transcripts:', transcriptsResult.errorMessage);
+        console.error('Debug info:', JSON.stringify(debugInfo, null, 2));
         return c.json({
           error: transcriptsResult.errorMessage || 'Failed to fetch transcripts',
+          debug: debugInfo,
         }, 500);
       }
 
@@ -82,7 +91,7 @@ export function createMeetingsRoutes() {
       const skippedDuplicates: string[] = [];
 
       // Get all users for the userMap (for assignee lookup)
-      const users = await kvUserStore.getAllUsers();
+      const users = await d1UserStore.getAllUsers();
       const userMap = new Map<string, Assignee>();
       for (const user of users) {
         userMap.set(user.id, user);

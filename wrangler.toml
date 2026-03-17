@@ -4,9 +4,11 @@ compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 account_id = "c6b2ffe078b3cd81ad2b316057d18858"
 
-[[kv_namespaces]]
-binding = "ISSUES_KV"
-id = "10cb7a42c6c74a98904eb367ff1fccef"
+[[d1_databases]]
+binding = "DB"
+database_name = "stackdash-db"
+database_id = "cfe4c4de-1dc2-4b11-85d7-c9e182c7d816"
+migrations_dir = "migrations"
 
 [vars]
 # Non-secret env vars (secrets added via `wrangler secret put`)

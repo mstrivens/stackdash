@@ -3,6 +3,7 @@ import type { CustomerTier } from '../types';
 // Pylon webhook event types
 export type PylonEventType =
   | 'new-issue'
+  | 'issue-reassigned'
   | 'issue.created'
   | 'issue.updated'
   | 'issue.resolved'

@@ -6,11 +6,11 @@ import { createIssuesRoutes } from './api/issues-kv';
 import { createTodosRoutes } from './api/todos-kv';
 import { createUsersRoutes } from './api/users-kv';
 import { createGenerationRoutes } from './api/generation-kv';
-import { createMeetingsRoutes } from './api/meetings-kv';
+import { createMeetingsRoutes, setMeetingsEnv } from './api/meetings-kv';
 import { createWebhookHandler } from './pylon/handler-kv';
 import { setMCPEnv } from './mcp/client';
-import { setKVNamespace } from './store/kv-issues';
-import { setUsersKVNamespace } from './store/kv-users';
+import { setD1Database } from './store/d1-issues';
+import { setUsersD1Database } from './store/d1-users';
 import { setAgentEnv } from './agent';
 import { setVerifyEnv } from './pylon/verify';
 
@@ -21,7 +21,7 @@ type Bindings = {
   STACKONE_FIREFLIES_ACCOUNT_ID?: string;
   PYLON_WEBHOOK_SECRET?: string;
   DASHBOARD_PASSWORD?: string;
-  ISSUES_KV: KVNamespace;
+  DB: D1Database;
   ASSETS?: {
     fetch: (request: Request) => Promise<Response>;
   };
@@ -29,13 +29,14 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-// Set env and KV for each request
+// Set env and D1 for each request
 app.use('*', async (c, next) => {
   setMCPEnv(c.env);
-  setKVNamespace(c.env.ISSUES_KV);
-  setUsersKVNamespace(c.env.ISSUES_KV); // Reuse same KV namespace
+  setD1Database(c.env.DB);
+  setUsersD1Database(c.env.DB);
   setAgentEnv(c.env);
   setVerifyEnv(c.env);
+  setMeetingsEnv(c.env);
   await next();
 });
 
@@ -81,6 +82,7 @@ app.route('/api/meetings', createMeetingsRoutes());
 
 // Pylon webhook (KV-backed)
 app.post('/api/pylon/webhook', createWebhookHandler());
+
 
 
 // Fallback to index.html for SPA routing (non-API routes)

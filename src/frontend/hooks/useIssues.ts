@@ -49,7 +49,7 @@ export function useIssues(): UseIssuesReturn {
     return map;
   }, [users]);
 
-  // Use all users from the API as assignees (already filtered to SE team on backend)
+  // All stored users are SE team members (filtered on backend)
   const assignees = useMemo(() => {
     return [...users].sort((a, b) => {
       const nameA = a.name || a.email || '';

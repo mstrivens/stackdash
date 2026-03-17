@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { kvIssueStore } from '../store/kv-issues';
+import { d1IssueStore } from '../store/d1-issues';
 import { generateTodoFromIssue } from '../agent';
 import type { GenerateTodoRequest, GenerateTodoResponse } from '../types';
 
@@ -20,7 +20,7 @@ export function createTodosRoutes() {
       return c.json({ error: 'issueId is required' }, 400);
     }
 
-    const issue = await kvIssueStore.getIssue(body.issueId);
+    const issue = await d1IssueStore.getIssue(body.issueId);
     if (!issue) {
       return c.json({ error: 'Issue not found' }, 404);
     }

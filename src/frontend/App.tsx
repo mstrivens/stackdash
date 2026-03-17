@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useIssues } from './hooks/useIssues';
 import { useTodos } from './hooks/useTodos';
@@ -10,6 +10,17 @@ import type { Todo, TriagedIssue, Assignee } from './types';
 function getIssueAssignee(issue: TriagedIssue): Assignee | undefined {
   const originalIssue = issue.originalIssue as typeof issue.originalIssue & { metadata?: { assignee?: Assignee } };
   return originalIssue.assignee || originalIssue.metadata?.assignee;
+}
+
+const FILTER_STORAGE_KEY = 'stackdash_assignee_filter';
+
+function loadSavedFilter(): string | null {
+  try {
+    const stored = localStorage.getItem(FILTER_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
 }
 
 function App() {
@@ -29,7 +40,16 @@ function App() {
     completedCount,
   } = useTodos();
 
-  const [selectedAssignee, setSelectedAssignee] = useState<string | null>(null);
+  const [selectedAssignee, setSelectedAssignee] = useState<string | null>(loadSavedFilter);
+
+  // Persist filter to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(selectedAssignee));
+    } catch (err) {
+      console.error('Failed to save filter:', err);
+    }
+  }, [selectedAssignee]);
 
   // Filter issues based on selected assignee
   const filteredIssues = useMemo(() => {

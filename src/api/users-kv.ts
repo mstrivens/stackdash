@@ -1,8 +1,15 @@
 import { Hono } from 'hono';
-import { kvUserStore } from '../store/kv-users';
+import { d1UserStore } from '../store/d1-users';
 import { mcpClient } from '../mcp/client';
 
 const SE_TEAM_NAME = 'SEs';
+
+// Pylon AI agent - hardcoded since it's not returned by the users API
+const PYLON_AI_AGENT = {
+  id: '9b76d9de-6c32-4176-9654-b463094e626d',
+  email: 'ai-agent@pylon.com',
+  name: 'Pylon AI',
+};
 
 function formatNameFromEmail(email: string): string {
   const namePart = email.split('@')[0];
@@ -15,14 +22,13 @@ function formatNameFromEmail(email: string): string {
 export function createUsersRoutes() {
   const users = new Hono();
 
-  // GET /api/users - Fetch SE team users (from cache or MCP)
+  // GET /api/users - Fetch SE team members only (plus Pylon AI agent)
   users.get('/', async (c) => {
     // Check if we need to refresh the cache
-    const hasUsers = await kvUserStore.hasUsers();
-    const isStale = await kvUserStore.isCacheStale();
+    const hasUsers = await d1UserStore.hasUsers();
+    const isStale = await d1UserStore.isCacheStale();
 
     if (!hasUsers || isStale) {
-      // Fetch teams to get SE team members only
       const teamsResult = await mcpClient.listTeams();
 
       const usersMap = new Map<string, { id: string; email: string; name: string }>();
@@ -41,18 +47,20 @@ export function createUsersRoutes() {
         }
       }
 
+      // Add Pylon AI agent (for name lookup when issues are initially assigned to it)
+      usersMap.set(PYLON_AI_AGENT.id, PYLON_AI_AGENT);
+
       if (usersMap.size > 0) {
-        await kvUserStore.setUsers(Array.from(usersMap.values()));
+        await d1UserStore.setUsers(Array.from(usersMap.values()));
       }
     }
 
-    const allUsers = await kvUserStore.getAllUsers();
+    const allUsers = await d1UserStore.getAllUsers();
     return c.json({ users: allUsers });
   });
 
   // POST /api/users/refresh - Force refresh the users cache
   users.post('/refresh', async (c) => {
-    // Fetch teams to get SE team members only
     const teamsResult = await mcpClient.listTeams();
 
     const usersMap = new Map<string, { id: string; email: string; name: string }>();
@@ -71,9 +79,12 @@ export function createUsersRoutes() {
       }
     }
 
+    // Add Pylon AI agent (for name lookup)
+    usersMap.set(PYLON_AI_AGENT.id, PYLON_AI_AGENT);
+
     if (usersMap.size > 0) {
       const allUsers = Array.from(usersMap.values());
-      await kvUserStore.setUsers(allUsers);
+      await d1UserStore.setUsers(allUsers);
       return c.json({
         success: true,
         count: usersMap.size,
@@ -90,7 +101,7 @@ export function createUsersRoutes() {
   // GET /api/users/:id - Get a single user
   users.get('/:id', async (c) => {
     const id = c.req.param('id');
-    const user = await kvUserStore.getUser(id);
+    const user = await d1UserStore.getUser(id);
 
     if (!user) {
       return c.json({ error: 'User not found' }, 404);

@@ -2,8 +2,8 @@ import type { Context } from 'hono';
 import type { PylonWebhookPayload, LegacyPylonWebhookPayload, PylonIssueData, PylonMCPIssue } from './types';
 import type { PylonIssue } from '../types';
 import { verifyWebhookSignature, parseSignatureHeader } from './verify';
-import { kvIssueStore } from '../store/kv-issues';
-import { kvUserStore } from '../store/kv-users';
+import { d1IssueStore } from '../store/d1-issues';
+import { d1UserStore } from '../store/d1-users';
 import { triageIssue } from '../agent';
 import { mcpClient } from '../mcp/client';
 
@@ -154,7 +154,25 @@ export function createWebhookHandler() {
     if (isNewPayloadFormat(payload)) {
       eventType = payload.event_type;
 
-      // Only process new-issue events
+      // Handle issue reassignment - update existing issue with new assignee
+      if (eventType === 'issue-reassigned') {
+        const issueId = payload.client_payload.id;
+        console.log(`Issue reassigned webhook received: ${issueId}`);
+
+        // Check if we have this issue
+        const existingIssue = await d1IssueStore.getIssue(issueId);
+        if (!existingIssue) {
+          console.log(`Reassigned issue not found in store: ${issueId}`);
+          return c.json({ received: true, processed: false, reason: 'issue_not_found' });
+        }
+
+        // Refresh issue data from MCP to get updated assignee
+        await refreshIssueFromMCP(issueId);
+
+        return c.json({ received: true, processed: true, issueId, action: 'refreshed' });
+      }
+
+      // Only process new-issue events for new issues
       if (eventType !== 'new-issue') {
         console.log(`Ignoring event type: ${eventType}`);
         return c.json({ received: true, processed: false });
@@ -164,7 +182,7 @@ export function createWebhookHandler() {
       issue = convertNewPayloadToInternal(payload);
 
       // Check for duplicate
-      if (await kvIssueStore.hasIssue(issue.id)) {
+      if (await d1IssueStore.hasIssue(issue.id)) {
         console.log(`Duplicate issue ignored: ${issue.id}`);
         return c.json({ received: true, processed: false, reason: 'duplicate' });
       }
@@ -172,7 +190,7 @@ export function createWebhookHandler() {
       console.log(`Webhook received for issue: ${issue.id} - "${issue.title}"`);
 
       // Add to store as pending
-      await kvIssueStore.addPendingIssue(issue);
+      await d1IssueStore.addPendingIssue(issue);
 
       // Enrich and triage (await to ensure it completes before response)
       await enrichAndTriageIssue(issue.id, issue);
@@ -191,12 +209,12 @@ export function createWebhookHandler() {
 
       issue = convertLegacyToInternal(payload.data);
 
-      if (await kvIssueStore.hasIssue(issue.id)) {
+      if (await d1IssueStore.hasIssue(issue.id)) {
         console.log(`Duplicate issue ignored: ${issue.id}`);
         return c.json({ received: true, processed: false, reason: 'duplicate' });
       }
 
-      await kvIssueStore.addPendingIssue(issue);
+      await d1IssueStore.addPendingIssue(issue);
       console.log(`Issue received: ${issue.id} - "${issue.title}"`);
 
       await enrichAndTriageIssue(issue.id, issue);
@@ -208,10 +226,37 @@ export function createWebhookHandler() {
   };
 }
 
+// Refresh issue data from MCP (for reassignment updates, etc.)
+async function refreshIssueFromMCP(issueId: string): Promise<void> {
+  try {
+    console.log(`Refreshing issue from MCP: ${issueId}`);
+    const mcpResult = await mcpClient.getIssue(issueId);
+
+    if (mcpResult.isError || !mcpResult.content) {
+      console.warn(`MCP fetch failed for refresh ${issueId}: ${mcpResult.errorMessage}`);
+      return;
+    }
+
+    const refreshedIssue = convertMCPIssueToInternal(mcpResult.content);
+
+    // Enrich assignee with full user data
+    if (refreshedIssue.assignee) {
+      refreshedIssue.assignee = await d1UserStore.enrichAssignee(refreshedIssue.assignee);
+    }
+
+    // Update the stored issue with refreshed data
+    await d1IssueStore.updateOriginalIssue(issueId, refreshedIssue);
+    console.log(`Issue refreshed: ${issueId} - Assignee: ${refreshedIssue.assignee?.name || 'none'}`);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`Failed to refresh issue ${issueId}:`, errorMessage);
+  }
+}
+
 // Enrich issue via MCP then triage
 async function enrichAndTriageIssue(issueId: string, initialIssue: PylonIssue): Promise<void> {
   try {
-    await kvIssueStore.markTriaging(issueId);
+    await d1IssueStore.markTriaging(issueId);
 
     // Fetch full issue details from Pylon via MCP
     console.log(`Fetching issue details from Pylon MCP: ${issueId}`);
@@ -224,7 +269,7 @@ async function enrichAndTriageIssue(issueId: string, initialIssue: PylonIssue): 
 
       // Enrich assignee with full user data from cache
       if (enrichedIssue.assignee) {
-        enrichedIssue.assignee = await kvUserStore.enrichAssignee(enrichedIssue.assignee);
+        enrichedIssue.assignee = await d1UserStore.enrichAssignee(enrichedIssue.assignee);
       }
 
       // Fetch account name if we have accountId but no accountName
@@ -247,7 +292,7 @@ async function enrichAndTriageIssue(issueId: string, initialIssue: PylonIssue): 
     // Run triage
     const result = await triageIssue(enrichedIssue);
 
-    await kvIssueStore.updateTriagedIssue(issueId, {
+    await d1IssueStore.updateTriagedIssue(issueId, {
       priority: result.priority,
       priorityConfidence: result.confidence,
       summary: result.summary,
@@ -258,6 +303,6 @@ async function enrichAndTriageIssue(issueId: string, initialIssue: PylonIssue): 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error(`Triage failed for ${issueId}:`, errorMessage);
-    await kvIssueStore.markFailed(issueId, errorMessage);
+    await d1IssueStore.markFailed(issueId, errorMessage);
   }
 }

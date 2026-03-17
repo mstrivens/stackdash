@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { kvIssueStore } from '../store/kv-issues';
-import { kvUserStore } from '../store/kv-users';
+import { d1IssueStore } from '../store/d1-issues';
+import { d1UserStore } from '../store/d1-users';
 import { mcpClient } from '../mcp/client';
 import type { IssuesResponse, PylonIssue } from '../types';
 import type { PylonMCPIssue } from '../pylon/types';
@@ -53,8 +53,8 @@ export function createIssuesRoutes() {
 
   // GET /api/issues - Fetch all triaged issues with stats
   issues.get('/', async (c) => {
-    const allIssues = await kvIssueStore.getAllIssues();
-    const stats = await kvIssueStore.getStats();
+    const allIssues = await d1IssueStore.getAllIssues();
+    const stats = await d1IssueStore.getStats();
 
     const response: IssuesResponse = {
       issues: allIssues,
@@ -68,14 +68,14 @@ export function createIssuesRoutes() {
   // GET /api/issues/assignees - Get all unique assignees
   // NOTE: Must be defined before /:id to avoid matching "assignees" as an ID
   issues.get('/assignees', async (c) => {
-    const assignees = await kvIssueStore.getAssignees();
+    const assignees = await d1IssueStore.getAssignees();
     return c.json({ assignees });
   });
 
   // GET /api/issues/:id - Fetch a single issue
   issues.get('/:id', async (c) => {
     const id = c.req.param('id');
-    const issue = await kvIssueStore.getIssue(id);
+    const issue = await d1IssueStore.getIssue(id);
 
     if (!issue) {
       return c.json({ error: 'Issue not found' }, 404);
@@ -92,14 +92,14 @@ export function createIssuesRoutes() {
       return c.json({ error: 'Invalid priority. Must be high, medium, or low' }, 400);
     }
 
-    const filteredIssues = await kvIssueStore.getIssuesByPriority(priority);
+    const filteredIssues = await d1IssueStore.getIssuesByPriority(priority);
     return c.json({ issues: filteredIssues, count: filteredIssues.length });
   });
 
   // DELETE /api/issues/:id - Delete an issue
   issues.delete('/:id', async (c) => {
     const id = c.req.param('id');
-    const deleted = await kvIssueStore.deleteIssue(id);
+    const deleted = await d1IssueStore.deleteIssue(id);
 
     if (!deleted) {
       return c.json({ error: 'Issue not found' }, 404);
@@ -111,7 +111,7 @@ export function createIssuesRoutes() {
   // POST /api/issues/:id/refresh - Re-fetch and update issue from MCP
   issues.post('/:id/refresh', async (c) => {
     const id = c.req.param('id');
-    const existingIssue = await kvIssueStore.getIssue(id);
+    const existingIssue = await d1IssueStore.getIssue(id);
 
     if (!existingIssue) {
       return c.json({ error: 'Issue not found' }, 404);
@@ -130,7 +130,7 @@ export function createIssuesRoutes() {
     // Convert and enrich
     const refreshedIssue = convertMCPIssueToInternal(mcpResult.content);
     if (refreshedIssue.assignee) {
-      refreshedIssue.assignee = await kvUserStore.enrichAssignee(refreshedIssue.assignee);
+      refreshedIssue.assignee = await d1UserStore.enrichAssignee(refreshedIssue.assignee);
     }
 
     // Fetch account name if we have accountId but no accountName
@@ -145,14 +145,14 @@ export function createIssuesRoutes() {
     }
 
     // Update the issue with refreshed data
-    await kvIssueStore.updateTriagedIssue(id, {
+    await d1IssueStore.updateTriagedIssue(id, {
       priority: existingIssue.priority,
       priorityConfidence: existingIssue.priorityConfidence,
       summary: existingIssue.summary,
       investigationOutline: existingIssue.investigationOutline,
     }, refreshedIssue);
 
-    const updatedIssue = await kvIssueStore.getIssue(id);
+    const updatedIssue = await d1IssueStore.getIssue(id);
 
     return c.json({
       success: true,

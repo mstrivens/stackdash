@@ -94,6 +94,21 @@ export const kvIssueStore = {
     }
   },
 
+  // Update original issue data without re-triaging (e.g., for reassignment updates)
+  async updateOriginalIssue(issueId: string, updatedIssue: PylonIssue): Promise<TriagedIssue | undefined> {
+    const data = await getData();
+    const issue = data.issues[issueId];
+    if (!issue) return undefined;
+
+    data.issues[issueId] = {
+      ...issue,
+      originalIssue: updatedIssue,
+    };
+    data.lastUpdated = new Date().toISOString();
+    await saveData(data);
+    return data.issues[issueId];
+  },
+
   async getIssue(issueId: string): Promise<TriagedIssue | undefined> {
     const data = await getData();
     return data.issues[issueId];
