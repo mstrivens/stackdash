@@ -141,9 +141,14 @@ export function createWebhookHandler() {
       return c.json({ error: 'Invalid JSON payload' }, 400);
     }
 
+    // Log the raw payload for debugging
+    console.log(`Webhook received - raw payload keys: ${Object.keys(payload as object).join(', ')}`);
+    console.log(`Webhook raw payload: ${rawBody.substring(0, 500)}`);
+
     // Unwrap if payload is nested inside webhook_payload (Pylon wrapper format)
     const wrappedPayload = payload as { webhook_payload?: unknown };
     if (wrappedPayload.webhook_payload) {
+      console.log(`Unwrapping webhook_payload`);
       payload = wrappedPayload.webhook_payload;
     }
 
@@ -154,15 +159,16 @@ export function createWebhookHandler() {
     if (isNewPayloadFormat(payload)) {
       eventType = payload.event_type;
 
-      // Handle issue reassignment - update existing issue with new assignee
-      if (eventType === 'issue-reassigned') {
+      // Handle issue reassignment or updates - update existing issue with new data
+      if (eventType === 'issue-reassigned' || eventType === 'issue.updated') {
         const issueId = payload.client_payload.id;
-        console.log(`Issue reassigned webhook received: ${issueId}`);
+        console.log(`Issue ${eventType} webhook received: ${issueId}`);
+        console.log(`Full client_payload: ${JSON.stringify(payload.client_payload)}`);
 
         // Check if we have this issue
         const existingIssue = await d1IssueStore.getIssue(issueId);
         if (!existingIssue) {
-          console.log(`Reassigned issue not found in store: ${issueId}`);
+          console.log(`Updated issue not found in store: ${issueId}`);
           return c.json({ received: true, processed: false, reason: 'issue_not_found' });
         }
 
@@ -201,9 +207,27 @@ export function createWebhookHandler() {
     // Handle legacy payload format
     if (isLegacyPayloadFormat(payload)) {
       eventType = payload.event;
+      console.log(`Legacy webhook received: ${eventType}`);
+
+      // Handle issue updates (reassignment, etc.) in legacy format
+      if (eventType === 'issue.updated') {
+        const issueId = payload.data.id;
+        console.log(`Legacy issue.updated webhook received: ${issueId}`);
+
+        const existingIssue = await d1IssueStore.getIssue(issueId);
+        if (!existingIssue) {
+          console.log(`Updated issue not found in store: ${issueId}`);
+          return c.json({ received: true, processed: false, reason: 'issue_not_found' });
+        }
+
+        // Refresh issue data from MCP to get updated assignee
+        await refreshIssueFromMCP(issueId);
+
+        return c.json({ received: true, processed: true, issueId, action: 'refreshed' });
+      }
 
       if (eventType !== 'issue.created') {
-        console.log(`Ignoring event type: ${eventType}`);
+        console.log(`Ignoring legacy event type: ${eventType}`);
         return c.json({ received: true, processed: false });
       }
 
@@ -222,6 +246,7 @@ export function createWebhookHandler() {
       return c.json({ received: true, processed: true, issueId: issue.id });
     }
 
+    console.log(`Unrecognized payload format - keys: ${Object.keys(payload as object).join(', ')}`);
     return c.json({ error: 'Unrecognized payload format' }, 400);
   };
 }
@@ -237,16 +262,19 @@ async function refreshIssueFromMCP(issueId: string): Promise<void> {
       return;
     }
 
+    console.log(`MCP returned assignee: ${JSON.stringify(mcpResult.content.assignee)}`);
+
     const refreshedIssue = convertMCPIssueToInternal(mcpResult.content);
 
     // Enrich assignee with full user data
     if (refreshedIssue.assignee) {
       refreshedIssue.assignee = await d1UserStore.enrichAssignee(refreshedIssue.assignee);
+      console.log(`Enriched assignee: ${JSON.stringify(refreshedIssue.assignee)}`);
     }
 
     // Update the stored issue with refreshed data
-    await d1IssueStore.updateOriginalIssue(issueId, refreshedIssue);
-    console.log(`Issue refreshed: ${issueId} - Assignee: ${refreshedIssue.assignee?.name || 'none'}`);
+    const updateResult = await d1IssueStore.updateOriginalIssue(issueId, refreshedIssue);
+    console.log(`Issue refreshed: ${issueId} - Assignee: ${refreshedIssue.assignee?.name || 'none'} - Update success: ${!!updateResult}`);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error(`Failed to refresh issue ${issueId}:`, errorMessage);
