@@ -182,9 +182,23 @@ export function createWebhookHandler() {
     const isUpdateEvent = eventType === 'issue-reassigned' || eventType === 'issue.updated';
     if (isUpdateEvent) {
       const existingIssue = await d1IssueStore.getIssue(issueId);
+
       if (!existingIssue) {
-        console.log(`Updated issue not found in store: ${issueId}`);
-        return c.json({ received: true, processed: false, reason: 'issue_not_found' });
+        // Issue not in store - fetch from MCP and create it
+        console.log(`Issue not in store, fetching from MCP: ${issueId}`);
+        const mcpResult = await mcpClient.getIssue(issueId);
+
+        if (mcpResult.isError || !mcpResult.content) {
+          console.log(`Failed to fetch issue from MCP: ${issueId} - ${mcpResult.errorMessage}`);
+          return c.json({ received: true, processed: false, reason: 'issue_not_found' });
+        }
+
+        const newIssue = convertMCPIssueToInternal(mcpResult.content);
+        console.log(`Creating issue from MCP: ${issueId} - "${newIssue.title}"`);
+        await d1IssueStore.addPendingIssue(newIssue);
+        await enrichAndTriageIssue(issueId, newIssue);
+
+        return c.json({ received: true, processed: true, issueId, action: 'created_and_triaged' });
       }
 
       await refreshIssueFromMCP(issueId);

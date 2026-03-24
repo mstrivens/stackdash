@@ -354,17 +354,41 @@ async function fetchFreshIssueContext(issueId: string): Promise<FreshIssueContex
   };
 }
 
+// Pylon message structure from pylon_get_issue_messages API
+interface PylonMessage {
+  id: string;
+  message_html: string;
+  timestamp: string;
+  source: string;
+  author: {
+    name: string;
+    contact?: { id: string; email: string };
+    user?: { id: string; email?: string };
+    avatar_url?: string;
+  };
+  is_private: boolean;
+}
+
 // Format messages for display in prompt
 function formatMessages(messages: unknown): string {
   if (!messages || !Array.isArray(messages)) {
     return 'No message history available';
   }
 
-  return messages.map((msg: { body_text?: string; from?: { email?: string; name?: string }; created_at?: string }, i: number) => {
-    const sender = msg.from?.name || msg.from?.email || 'Unknown';
-    const timestamp = msg.created_at ? new Date(msg.created_at).toLocaleString() : '';
-    const body = msg.body_text || '(no content)';
-    return `[${i + 1}] ${sender} (${timestamp}):\n${body}`;
+  return messages.map((msg: PylonMessage, i: number) => {
+    // Author name is directly on author object
+    // Email is nested under author.contact (external) or author.user (internal)
+    const authorName = msg.author?.name || 'Unknown';
+    const authorEmail = msg.author?.contact?.email || msg.author?.user?.email || '';
+    const sender = authorEmail ? `${authorName} (${authorEmail})` : authorName;
+
+    // Timestamp field
+    const formattedTimestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
+
+    // Message content is HTML, needs to be stripped
+    const body = msg.message_html ? stripHtml(msg.message_html) : '(no content)';
+
+    return `[${i + 1}] ${sender} - ${formattedTimestamp}:\n${body}`;
   }).join('\n\n---\n\n');
 }
 
